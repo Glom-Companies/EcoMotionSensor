@@ -135,7 +135,75 @@ void setup() {
   lcd.clear();
 }
 
+// ---------- Boucle Principale (loop) ----------
+
 void loop() {
-  // put your main code here, to run repeatedly: 
+  // 1. Lecture des données brutes (int16_t) depuis le MPU-6050  
+  int16_t rawAx, rawAy, rawAz;
+  int16_t rawGx, rawGy, rawGz;
+  mpu.getMotion6(&rawAx, &rawAy, &rawAz, &rawGx, &rawGy, &rawGz);
+
+  // 2. Correction des valeurs du gyroscoe en soustrayant le biais (offset)
+  float gyroX = (rawGx - gyroOffsetX) / GYRO_SENSITIVITY; // en °/s
+  float gyroY = (rawGy - gyroOffsetY) / GYRO_SENSITIVITY;
+  float gyroZ = (rawGz - gyroOffsetZ) / GYRO_SENSITIVITY;  
+
+  // 3. Conversion des valeurs de l'accéléromètre en 'g' puis en m/s²
+  float accelX_g = (rawAx + accelOffsetX) / ACCEL_SENSITIVITY;
+  float accelY_g = (rawAy + accelOffsetY) / ACCEL_SENSITIVITY;
+  float accelZ_g = (rawAz + accelOffsetZ) / ACCEL_SENSITIVITY;
+  // Acceleration en m/s²
+  const float G_const = 9.81;
+  float accelX = accelX_g * G_const; // en m/s²
+  float accelY = accelY_g * G_const;
+  float accelZ = accelZ_g * G_const;
+
+  // 4. Calcul de l'angle d'inclinaison approximatif(roll, pitch)
+  //    roll = rotation autour de l'axe X (penché vers la gauche/droite)
+  //    pitch = rotation autour de l'axe Y (penché vers le haut/bas)
+  float roll = atan2(accelY_g, sqrt(accelX_g * accelX_g + accelZ_g * accelZ_g)) * 57.2958; 
+  float pitch = atan2(accelX_g, sqrt(accelY_g * accelY_g + accelZ_g * accelZ_g)) * 57.2958;
+
+  // 5. Déterminer l'orientation textuelle (Gauche, Droite, Haut, Bas, Stable)
+  String orientation;
+  if (roll > 20.0) orientation = "Droite"; // si roll > +20° → penché à droite
+  else if (roll < -20.0) orientation = "Gauche"; // si roll < -20° → penché à gauche
+  else if (pitch > 20.0) orientation = "Haut"; // si pitch > +20° → penché vers toi
+  else if (pitch < -20.0) orientation = "Bas";     // si pitch < -20° → penché vers l'avant
+  else orientation = "Stable";   // sinon, proche de 0 → stable
+
+  // 6. Calculer la "vitesse" (norme de l'accélération vectorielle)
+  //    √(ax² + ay² + az²)  en m/s² (approximation de l’intensité de mouvement)
+  float accelNorm = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+
+  // 7. Afficher sur le LCD
+  // Ligne 1 : "Ori: [Orientation]"
+  // Ligne 2 : "V: [accelNorm] m/s²"
+  lcd.setCursor(0, 0);
+  lcd.print("Ori:");
+  lcd.print(orientation);
+  lcd.print("   "); // on ajoute des espaces pour effacer les residus precedents
+
+  lcd.setCursor(0, 1);
+  lcd.print("V:");
+  lcd.print(accelNorm, 1); // une décimale (par ex. 2.3)
+  lcd.print(" m/s2");
+
+  // 8. Pour debug, affichage dans le moniteur série
+  Serial.print("Roll:");
+  Serial.print(roll, 1);
+  Serial.print(roll, 1);
+  Serial.print("  Pitch:");
+  Serial.print(pitch, 1);
+  Serial.print("  Ori:");
+  Serial.print(orientation);
+  Serial.print("  V=");
+  Serial.print(accelNorm, 2);
+  Serial.println(" m/s2");
+  
+  // 9. Pause courte avant la prochaine lecture (≈200 ms → 5 Hz)
+  delay(200);
+  
+ 
 
 }
